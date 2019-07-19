@@ -1,0 +1,37 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: rust
+
+    environment:
+      PG_VERSION: 10.9
+
+    steps:
+      - run:
+          name: Install dependencies
+          command: |
+            apt-get update
+            apt-get install -y clang musl-tools
+      - run: rustup target add x86_64-unknown-linux-musl
+      - run:
+          name: Download PostgreSQL sources
+          command: curl http://ftp.postgresql.org/pub/source/v$PG_VERSION/postgresql-$PG_VERSION.tar.gz | tar xzv
+      - run:
+          name: Configure
+          command: |
+            cd postgresql-$PG_VERSION
+            env CC=clang CXX=clang++ ./configure LDFLAGS='-static' --prefix=$PWD/build --without-readline --without-zlib
+      - run:
+          name: Compile libpq
+          command: |
+            cd postgresql-$PG_VERSION/src/interfaces/libpq/
+            make
+      - run:
+          name: Install diesel_cli
+          command: |
+            env PQ_LIB_STATIC=1 PQ_LIB_DIR=$PWD/postgresql-$PG_VERSION/src/interfaces/libpq \
+              cargo install diesel_cli --target=x86_64-unknown-linux-musl --no-default-features --features postgres
+      - store_artifacts:
+          path: /usr/local/cargo/bin/diesel
+          destination: diesel
